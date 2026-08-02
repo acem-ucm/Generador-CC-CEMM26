@@ -72,7 +72,7 @@
         .doc-authors { font-size: 8.2pt; text-align: right; margin-top: 5mm; color: #444; z-index: 20; position: relative; }
         .doc-corr { font-size: 7.5pt; text-align: right; font-style: italic; border-bottom: 0.5pt solid #eee; padding-bottom: 1.5mm; margin-bottom: 3mm; z-index: 20; position: relative; }
         .doc-sec { font-size: 10pt; font-weight: bold; color: var(--azul-ucm); margin-top: 2.5mm; margin-bottom: 1mm; z-index: 20; position: relative; }
-        .doc-body { font-size: 9.2pt; line-height: 1.35; text-align: justify; white-space: pre-wrap; color: #000; z-index: 20; position: relative; }
+        .doc-body { font-size: 9.2pt; line-height: 1.35; text-align: justify; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; color: #000; z-index: 20; position: relative; }
         .doc-k { font-size: 9.2pt; font-weight: bold; margin-top: 4mm; border-top: 0.5pt dashed #ddd; padding-top: 2mm; z-index: 20; position: relative; }
     </style>
 </head>
@@ -111,7 +111,7 @@
     </div>
 
     <div class="control-panel">
-        <div id="w-total" style="font-weight: bold; font-size: 1rem;">Cuerpo: 0 / 300</div>
+        <div id="w-total" style="font-weight: bold; font-size: 1rem;">Cuerpo: 0 / 500</div>
         <div class="btn-group">
             <button class="btn-action btn-pdf" id="b-pdf" disabled onclick="exportPDF()">DESCARGAR PDF</button>
             <button class="btn-action btn-docx" id="b-docx" disabled onclick="exportDOCX()">DESCARGAR WORD</button>
@@ -178,8 +178,8 @@
         document.getElementById('cnt-c').innerText = cc + " pal.";
 
         const total = ci + cp + cd + cc;
-        document.getElementById('w-total').innerText = "Cuerpo: " + total + " / 300";
-        document.getElementById('b-pdf').disabled = document.getElementById('b-docx').disabled = (total === 0 || total > 300);
+        document.getElementById('w-total').innerText = "Cuerpo: " + total + " / 500";
+        document.getElementById('b-pdf').disabled = document.getElementById('b-docx').disabled = (total === 0 || total > 500);
 
         setTxt('out-t', titleInput.value.toUpperCase() || "TÍTULO DEL TRABAJO");
         setTxt('out-a', v('in-a') || "Autores y Afiliaciones");
@@ -187,6 +187,52 @@
         setTxt('out-i', v('in-i')); setTxt('out-p', v('in-p'));
         setTxt('out-d', v('in-d')); setTxt('out-c', v('in-c'));
         setTxt('out-k', "Palabras clave: " + (v('in-k') || "..."));
+
+        fitPage();
+    }
+
+    // Reduce progresivamente el cuerpo de texto para que, con hasta 500 palabras,
+    // el contenido siga cabiendo dentro de la única página A4 sin desbordarse ni cortarse.
+    const BASE_BODY_PT = 9.2, MIN_BODY_PT = 6.8;
+    const BASE_LH = 1.35, MIN_LH = 1.15;
+    const BASE_SEC_MT = 2.5, MIN_SEC_MT = 1.2;
+    const BASE_TITLE_MT = 8, MIN_TITLE_MT = 3;
+    const BASE_AUTH_MT = 5, MIN_AUTH_MT = 2;
+    const BASE_K_MT = 4, MIN_K_MT = 1.5;
+
+    function fitPage() {
+        const canvas = document.getElementById('document-canvas');
+        const bodies = document.querySelectorAll('.doc-body');
+        const secs = document.querySelectorAll('.doc-sec');
+        const title = document.querySelector('.doc-title');
+        const authors = document.querySelector('.doc-authors');
+        const keywords = document.querySelector('.doc-k');
+
+        let pt = BASE_BODY_PT;
+        bodies.forEach(b => { b.style.fontSize = pt + 'pt'; b.style.lineHeight = BASE_LH; });
+        secs.forEach(s => { s.style.marginTop = BASE_SEC_MT + 'mm'; });
+        title.style.marginTop = BASE_TITLE_MT + 'mm';
+        authors.style.marginTop = BASE_AUTH_MT + 'mm';
+        keywords.style.marginTop = BASE_K_MT + 'mm';
+
+        // Fase 1: reducir tamaño y espaciado del cuerpo de texto
+        while (canvas.scrollHeight > canvas.clientHeight && pt > MIN_BODY_PT) {
+            pt = Math.max(MIN_BODY_PT, pt - 0.1);
+            const lh = Math.max(MIN_LH, BASE_LH - (BASE_BODY_PT - pt) * 0.02);
+            const mt = Math.max(MIN_SEC_MT, BASE_SEC_MT - (BASE_BODY_PT - pt) * 0.15);
+            bodies.forEach(b => { b.style.fontSize = pt.toFixed(2) + 'pt'; b.style.lineHeight = lh; });
+            secs.forEach(s => { s.style.marginTop = mt.toFixed(2) + 'mm'; });
+        }
+
+        // Fase 2: si aún desborda en el tamaño mínimo, comprimir márgenes del encabezado
+        let step = 0;
+        while (canvas.scrollHeight > canvas.clientHeight && step < 20) {
+            step++;
+            const f = step / 20;
+            title.style.marginTop = (BASE_TITLE_MT - (BASE_TITLE_MT - MIN_TITLE_MT) * f).toFixed(2) + 'mm';
+            authors.style.marginTop = (BASE_AUTH_MT - (BASE_AUTH_MT - MIN_AUTH_MT) * f).toFixed(2) + 'mm';
+            keywords.style.marginTop = (BASE_K_MT - (BASE_K_MT - MIN_K_MT) * f).toFixed(2) + 'mm';
+        }
     }
 
     async function searchMesh() {
